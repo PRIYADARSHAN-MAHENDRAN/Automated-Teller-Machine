@@ -20,8 +20,10 @@ public class AutomatedTellerMachine {
 
             if (accountType != null) {
                 System.out.println("Login successful!");
+                System.out.println();
 
                 while (true) {
+                    System.out.println("```` Automated Teller Machine ````");
                     if (accountType.equals("A")) {
                         adminOptions();
                     } else if (accountType.equals("C")) {
@@ -51,7 +53,7 @@ public class AutomatedTellerMachine {
                             break;
                         case 4:
                             if (accountType.equals("A")) {
-                                changeAdminPin();
+                                changePin();
                             } else if (accountType.equals("C")) {
                                 withdraw();
                             }
@@ -63,10 +65,10 @@ public class AutomatedTellerMachine {
                             transferFunds();
                             break;
                         case 7:
-                            changeCustomerPin();
+                            changePin();
                             break;
                         case 0:
-                            System.out.println("Logging out...");
+                            System.out.println("Get your ATM card.");
                             accountType = login(); // Re-login the user
                             clearScreen();
                             break;
@@ -119,7 +121,9 @@ public class AutomatedTellerMachine {
 
         while (true) {
             clearScreen();
-            System.out.println("1. Login");
+            System.out.println("```` Welcome to KDFC ATM ````");
+            System.out.println();
+            System.out.println("1. Insert Card");
             System.out.println("0. Exit");
             System.out.print("Enter your choice: ");
             choice = scanner.nextInt();
@@ -187,6 +191,7 @@ public class AutomatedTellerMachine {
     }
 
     private static void viewAtmBalance() throws SQLException {
+        clearScreen();
         System.out.print("ATM BALANCE : $");
         String sql = "SELECT * FROM machine";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
@@ -199,139 +204,121 @@ public class AutomatedTellerMachine {
         } catch (SQLException e) {
             System.out.println("Error retrieving ATM balance: " + e.getMessage());
         }
+        waitForEnter();
+        clearScreen();
     }
 
     private static void viewTransactionHistory() throws SQLException {
-        System.out.println("Transaction History");
-        String sql = "SELECT * FROM transactionlog ";
+        clearScreen();
+        String sql = "SELECT * FROM transactionlog ORDER BY time DESC LIMIT 10";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             ResultSet rs = pstmt.executeQuery();
+
+            System.out.println("Last 10 Transactions:");
+            System.out.printf("%-20s %-10s %-10s %-30s\n", "Transaction Number", "Amount", "Type", "Time");
+            System.out.println("----------------------------------------------------------------------");
+
             while (rs.next()) {
-                String transactionnum = rs.getString("transaction_number");
-                int id = rs.getInt("customerid");
+                String transactionNumber = rs.getString("transaction_number");
                 int amount = rs.getInt("amount");
                 String type = rs.getString("type");
                 String time = rs.getString("time");
-                System.out.printf("Transaction id: %s,ID: %d, Amount: %d, Type: %s, Time: %s%n", transactionnum, id, amount, type, time);
+
+                System.out.printf("%-20s %-10d %-10s %-30s\n", transactionNumber, amount, type, time);
             }
         } catch (SQLException e) {
-            System.out.println("Error retrieving transaction history: " + e.getMessage());
+            System.out.println("Error retrieving transactions: " + e.getMessage());
         }
+        waitForEnter();
+        clearScreen();
     }
 
     private static void viewMyAccount() throws SQLException {
-        String sql = "SELECT customerid, bankname, useraccountbalance, userwalletbalance FROM user WHERE customerid = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setInt(1, customerId);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                int id = rs.getInt("customerid");
-                String bankName = rs.getString("bankname");
-                int accountBalance = rs.getInt("useraccountbalance");
-                int walletBalance = rs.getInt("userwalletbalance");
-                System.out.printf("ID: %d, Bank: %s, Account Balance: %d, Wallet Balance: %d%n", id, bankName, accountBalance, walletBalance);
-            } else {
-                System.out.println("No account information found for customer ID: " + customerId);
-            }
-        } catch (SQLException e) {
-            System.out.println("Error retrieving account information: " + e.getMessage());
-        }
+        clearScreen();
+        System.out.printf("ID: %d, Bank: %s, Account Balance: %d, Wallet Balance: %d%n", customerId, getCustomerBankName(customerId), getAccountBalance(customerId), getWalletBalance(customerId));
+        waitForEnter();
+        clearScreen();
+        return;
+
     }
 
     private static void viewMyBalance() throws SQLException {
-        String sql = "SELECT useraccountbalance, userwalletbalance FROM user WHERE customerid = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setInt(1, customerId);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                int accountBalance = rs.getInt("useraccountbalance");
-                int walletBalance = rs.getInt("userwalletbalance");
-                System.out.printf("Account Balance: %d%nWallet Balance: %d%n", accountBalance, walletBalance);
-            } else {
-                System.out.println("No account information found for customer ID: " + customerId);
-            }
-        } catch (SQLException e) {
-            System.out.println("Error retrieving account information: " + e.getMessage());
-        }
+
+        clearScreen();
+        System.out.printf("Account Balance: %d%nWallet Balance: %d%n", getAccountBalance(customerId), getWalletBalance(customerId));
+        waitForEnter();
+        clearScreen();
+        return;
+
     }
 
     private static void deposit() throws SQLException {
+        clearScreen();
         int amount = -1; // Initialize amount to an invalid value
-        int walletBalance = getWalletBalance(); // Get current wallet balance
+        int walletBalance = getWalletBalance(customerId); // Get current wallet balance
+        System.out.print("Enter amount to deposit: ");
+        amount = scanner.nextInt();
+        scanner.nextLine(); // Clear invalid input
 
-        // Prompt for valid deposit amount
-        while (amount <= 0 || amount > walletBalance) {
-            System.out.print("Enter amount to deposit: ");
-            amount = scanner.nextInt();
-
-            if (amount > walletBalance) {
-                System.out.println("Insufficient wallet balance. Available balance: " + walletBalance);
-            } else if (amount <= 0) {
-                System.out.println("Please enter a positive amount.");
-            }
+        if (amount > walletBalance) {
+            System.out.println("Insufficient wallet balance. Available balance: " + walletBalance);
+            waitForEnter();
+            clearScreen();
+            return;
         }
-
-        scanner.nextLine();
         int depositAmount = !bankname.equalsIgnoreCase("kdfc") ? amount - ((amount / 100) * 5) : amount;
+
         String sql;
         // Begin transaction to ensure atomicity
         connection.setAutoCommit(false);
         try {
             // Update user's account balance and wallet balance
             if (accountType.equals("C")) {
-                sql = "UPDATE user SET useraccountbalance = useraccountbalance + ?, userwalletbalance = userwalletbalance - ? WHERE customerid = ?";
-                try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-                    pstmt.setInt(1, depositAmount);
-                    pstmt.setInt(2, amount);
-                    pstmt.setInt(3, customerId);
-                    int rowsUpdated = pstmt.executeUpdate();
-                    if (rowsUpdated <= 0) {
-                        System.out.println("Failed to deposit. Please try again.");
-                        connection.rollback();
-                        return;
-                    }
-                }
-            } else {
-                sql = "UPDATE user SET userwalletbalance = userwalletbalance - ? WHERE customerid = ?";
-                try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-                    pstmt.setInt(1, amount);
-                    pstmt.setInt(2, customerId);
-                    int rowsUpdated = pstmt.executeUpdate();
-                    if (rowsUpdated <= 0) {
-                        System.out.println("Failed to deposit. Please try again.");
-                        connection.rollback();
-                        return;
-                    }
-                }
-            }
-
-            // Update ATM balance
-            sql = "UPDATE machine SET time = datetime('now'), atmbalance = atmbalance + ? WHERE time IS NOT NULL";
-            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-                pstmt.setInt(1, amount);
-                int rowsUpdated = pstmt.executeUpdate();
-                if (rowsUpdated <= 0) {
-                    System.out.println("Failed to update ATM balance.");
+                if (!updateAccountBalance(customerId, depositAmount)) {
+                    System.out.println("Failed to debit amount from account. Transaction aborted.");
                     connection.rollback();
+                    waitForEnter();
+                    clearScreen();
                     return;
                 }
+                if (!updateWalletBalance(customerId, -amount)) {
+                    System.out.println("Failed to credit amount to wallet. Transaction aborted.");
+                    connection.rollback();
+                    waitForEnter();
+                    clearScreen();
+                    return;
+                }
+            } else {
+                if (!updateWalletBalance(customerId, -amount)) {
+                    System.out.println("Failed to credit amount to wallet. Transaction aborted.");
+                    connection.rollback();
+                    waitForEnter();
+                    clearScreen();
+                    return;
+                }
+            }
+            // Update ATM balance
+            if (!updateAtmBalance(amount)) {
+                System.out.println("Failed to debit amount from atm. Transaction aborted.");
+                connection.rollback();
+                waitForEnter();
+                clearScreen();
+                return;
             }
 
             // Generate a unique 16-digit transaction number
             String transactionNumber = generateUniqueTransactionNumber();
 
-            // Insert transaction log entry
-            sql = "INSERT INTO transactionlog (transaction_number, customerid, amount, type, time) VALUES (?, ?, ?, 'DEPOSIT', datetime('now'))";
-            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-                pstmt.setString(1, transactionNumber);
-                pstmt.setInt(2, customerId);
-                pstmt.setInt(3, amount);
-                pstmt.executeUpdate();
+            if (!logTransaction(transactionNumber, customerId, amount, "DEPOSIT")) {
+                System.out.println("Failed to log transaction. Transaction aborted.");
+                connection.rollback();
+                waitForEnter();
+                clearScreen();
+                return;
             }
-
             // Commit transaction if all operations succeed
             connection.commit();
-            System.out.println("Deposit successful. Your new wallet balance is: " + getWalletBalance());
+            System.out.println("Deposit successful. Your new wallet balance is: " + getWalletBalance(customerId));
 
         } catch (SQLException e) {
             System.out.println("Error during deposit: " + e.getMessage());
@@ -339,6 +326,8 @@ public class AutomatedTellerMachine {
         } finally {
             connection.setAutoCommit(true); // Restore auto-commit mode
         }
+        waitForEnter();
+        clearScreen();
     }
 
     private static String generateUniqueTransactionNumber() throws SQLException {
@@ -361,10 +350,10 @@ public class AutomatedTellerMachine {
         return transactionNumber;
     }
 
-    private static int getWalletBalance() {
+    private static int getWalletBalance(int Id) {
         String sql = "SELECT userwalletbalance FROM user WHERE customerid = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setInt(1, customerId);
+            pstmt.setInt(1, Id);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
                 return rs.getInt("userwalletbalance");
@@ -379,19 +368,24 @@ public class AutomatedTellerMachine {
     }
 
     private static void withdraw() throws SQLException {
+        clearScreen();
         int amount = -1; // Initialize amount to an invalid value
-        int accountBalance = getAccountBalance(); // Get current account balance
+        int accountBalance = getAccountBalance(customerId); // Get current account balance
+        amount = scanner.nextInt();
+        scanner.nextLine(); // Clear invalid input
 
-        // Prompt for valid withdraw amount
-        while (amount < 0 || amount > accountBalance) {
-            System.out.print("Enter amount to withdraw: ");
-            amount = scanner.nextInt();
+        if (amount > accountBalance) {
+            System.out.println("Insufficient account balance. Available balance: " + accountBalance);
+            waitForEnter();
+            clearScreen();
+            return;
+        }
 
-            if (amount > accountBalance) {
-                System.out.println("Insufficient account balance. Available balance: " + accountBalance);
-            } else if (amount <= 0) {
-                System.out.println("Please enter a positive amount.");
-            }
+        if (getATMBalance() < amount) {
+            System.out.println("Insufficient ATM balance. Please comeback after some time.");
+            waitForEnter();
+            clearScreen();
+            return;
         }
 
         scanner.nextLine();
@@ -402,46 +396,44 @@ public class AutomatedTellerMachine {
         try {
             // Update user's account balance and wallet balance
 
-            sql = "UPDATE user SET useraccountbalance = useraccountbalance - ?, userwalletbalance = userwalletbalance + ? WHERE customerid = ?";
-            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-                pstmt.setInt(1, amount);
-                pstmt.setInt(2, withdrawAmount);
-                pstmt.setInt(3, customerId);
-                int rowsUpdated = pstmt.executeUpdate();
-                if (rowsUpdated <= 0) {
-                    System.out.println("Failed to deposit. Please try again.");
-                    connection.rollback();
-                    return;
-                }
+            if (!updateAccountBalance(customerId, -amount)) {
+                System.out.println("Failed to debit amount from account. Transaction aborted.");
+                connection.rollback();
+                waitForEnter();
+                clearScreen();
+                return;
+            }
+            if (!updateWalletBalance(customerId, withdrawAmount)) {
+                System.out.println("Failed to credit amount to wallet. Transaction aborted.");
+                connection.rollback();
+                waitForEnter();
+                clearScreen();
+                return;
             }
 
             // Update ATM balance
-            sql = "UPDATE machine SET time = datetime('now'), atmbalance = atmbalance - ? WHERE time IS NOT NULL";
-            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-                pstmt.setInt(1, amount);
-                int rowsUpdated = pstmt.executeUpdate();
-                if (rowsUpdated <= 0) {
-                    System.out.println("Failed to update ATM balance.");
-                    connection.rollback();
-                    return;
-                }
+            if (!updateAtmBalance(-amount)) {
+                System.out.println("Failed to debit amount from atm. Transaction aborted.");
+                connection.rollback();
+                waitForEnter();
+                clearScreen();
+                return;
             }
 
             // Generate a unique 16-digit transaction number
             String transactionNumber = generateUniqueTransactionNumber();
 
-            // Insert transaction log entry
-            sql = "INSERT INTO transactionlog (transaction_number, customerid, amount, type, time) VALUES (?, ?, ?, 'WITHDRAW', datetime('now'))";
-            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-                pstmt.setString(1, transactionNumber);
-                pstmt.setInt(2, customerId);
-                pstmt.setInt(3, amount);
-                pstmt.executeUpdate();
+            if (!logTransaction(transactionNumber, customerId, amount, "WITHDRAW")) {
+                System.out.println("Failed to log transaction. Transaction aborted.");
+                connection.rollback();
+                waitForEnter();
+                clearScreen();
+                return;
             }
 
             // Commit transaction if all operations succeed
             connection.commit();
-            System.out.println("Withdraw successful. Your new account balance is: " + getAccountBalance());
+            System.out.println("Withdraw successful. Your new account balance is: " + getAccountBalance(customerId));
 
         } catch (SQLException e) {
             System.out.println("Error during withdraw: " + e.getMessage());
@@ -449,28 +441,14 @@ public class AutomatedTellerMachine {
         } finally {
             connection.setAutoCommit(true); // Restore auto-commit mode
         }
-    }
-
-    private static int getAccountBalance() {
-        String sql = "SELECT useraccountbalance FROM user WHERE customerid = ?";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setInt(1, customerId);
-            ResultSet rs = pstmt.executeQuery();
-            if (rs.next()) {
-                return rs.getInt("useraccountbalance");
-            } else {
-                System.out.println("No wallet balance found for customer ID: " + customerId);
-                return 0; // Return 0 if no balance is found
-            }
-        } catch (SQLException e) {
-            System.out.println("Error retrieving wallet balance: " + e.getMessage());
-            return 0;
-        }
+        waitForEnter();
+        clearScreen();
     }
 
     private static void viewMiniStatement() throws SQLException {
+        clearScreen();
         System.out.println("Transaction History");
-        String sql = "SELECT * FROM transactionlog WHERE customerid=?";
+        String sql = "SELECT * FROM transactionlog WHERE customerid = ? ORDER BY time DESC LIMIT 10";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, customerId);
             ResultSet rs = pstmt.executeQuery();
@@ -484,22 +462,244 @@ public class AutomatedTellerMachine {
         } catch (SQLException e) {
             System.out.println("Error retrieving transaction history: " + e.getMessage());
         }
+        waitForEnter();
+        clearScreen();
     }
 
     private static void transferFunds() throws SQLException {
-        // Implement fund transfer logic here
+        clearScreen();
+        System.out.println("Fund Transfer");
+        System.out.println();
+
+        // Prompt for the customer ID to transfer funds to
+        System.out.print("Enter Customer ID to transfer to: ");
+        int transferId = scanner.nextInt();
+        scanner.nextLine();
+
+        // Check if the transfer ID exists in the database
+        if (!isValidCustomer(transferId)) {
+            System.out.println("Entered customer ID is incorrect. Please try again.");
+            waitForEnter();
+            clearScreen();
+            return;
+        }
+
+        // Prompt for the amount to transfer
+        System.out.print("Enter amount to transfer: ");
+        int transferAmount = scanner.nextInt();
+        scanner.nextLine();
+
+        // Get current account balance and bank name
+        int accountBalance = getAccountBalance(customerId);
+        String customerBank = getCustomerBankName(customerId);
+
+        // Check if the account has sufficient balance
+        if (accountBalance < transferAmount) {
+            System.out.println("Insufficient account balance. Available balance: " + accountBalance);
+            waitForEnter();
+            clearScreen();
+            return;
+        }
+
+        // Calculate amount to be credited, applying transaction fee if applicable
+        int amountToCredit = customerBank.equals("kdfc") ? transferAmount : (int) (transferAmount * 0.9); // 10% fee
+
+        // Begin transaction to ensure atomicity
+        connection.setAutoCommit(false);
+        try {
+            // Debit amount from sender's account
+            if (!updateAccountBalance(customerId, -transferAmount)) {
+                System.out.println("Failed to debit amount. Transaction aborted.");
+                connection.rollback();
+                waitForEnter();
+                clearScreen();
+                return;
+            }
+
+            // Credit amount to recipient's account
+            if (!updateAccountBalance(transferId, amountToCredit)) {
+                System.out.println("Failed to credit amount. Transaction aborted.");
+                connection.rollback();
+                waitForEnter();
+                clearScreen();
+                return;
+            }
+
+            // Log transaction with a unique transaction number
+            String transactionNumber = generateUniqueTransactionNumber();
+
+            if (!logTransaction(transactionNumber, customerId, transferAmount, "TRANSFER")) {
+                System.out.println("Failed to log transaction. Transaction aborted.");
+                connection.rollback();
+                waitForEnter();
+                clearScreen();
+                return;
+            }
+
+            // Commit transaction if all operations succeed
+            connection.commit();
+            System.out.println("Transfer successful!");
+
+        } catch (SQLException e) {
+            System.out.println("Error during fund transfer: " + e.getMessage());
+            connection.rollback(); // Roll back transaction in case of error
+        } finally {
+            connection.setAutoCommit(true); // Restore auto-commit mode
+        }
+        waitForEnter();
+        clearScreen();
     }
 
-    private static void changeAdminPin() throws SQLException {
-        // Implement admin PIN change logic here
+    private static boolean isValidCustomer(int id) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM user WHERE customerid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, id);
+            ResultSet rs = pstmt.executeQuery();
+            return rs.next() && rs.getInt(1) > 0;
+        }
     }
 
-    private static void changeCustomerPin() throws SQLException {
-        // Implement customer PIN change logic here
+    private static int getAccountBalance(int id) throws SQLException {
+        String sql = "SELECT useraccountbalance FROM user WHERE customerid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, id);
+            ResultSet rs = pstmt.executeQuery();
+            return rs.next() ? rs.getInt("useraccountbalance") : 0;
+        }
+    }
+
+    private static int getATMBalance() throws SQLException {
+        String sql = "SELECT atmbalance FROM machine";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            ResultSet rs = pstmt.executeQuery();
+            return rs.next() ? rs.getInt("atmbalance") : 0;
+        }
+    }
+
+    private static String getCustomerBankName(int id) throws SQLException {
+        String sql = "SELECT bankname FROM user WHERE customerid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, id);
+            ResultSet rs = pstmt.executeQuery();
+            return rs.next() ? rs.getString("bankname") : "";
+        }
+    }
+
+    private static boolean updateAccountBalance(int id, int amount) throws SQLException {
+        String sql = "UPDATE user SET useraccountbalance = useraccountbalance + ? WHERE customerid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, amount);
+            pstmt.setInt(2, id);
+            return pstmt.executeUpdate() > 0;
+        }
+    }
+
+    private static boolean updateWalletBalance(int id, int amount) throws SQLException {
+        String sql = "UPDATE user SET userwalletbalance = userwalletbalance + ? WHERE customerid = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, amount);
+            pstmt.setInt(2, id);
+            return pstmt.executeUpdate() > 0;
+        }
+    }
+
+    private static boolean updateAtmBalance(int amount) throws SQLException {
+        String sql = "UPDATE machine SET time = datetime('now'), atmbalance = atmbalance + ? WHERE time IS NOT NULL";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, amount);
+            return pstmt.executeUpdate() > 0;
+        }
+    }
+
+    private static boolean logTransaction(String transactionNumber, int id, int amount, String type) throws SQLException {
+        String sql = "INSERT INTO transactionlog (transaction_number, customerid, amount, type, time) VALUES (?, ?, ?, ?, datetime('now'))";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, transactionNumber);
+            pstmt.setInt(2, id);
+            pstmt.setInt(3, amount);
+            pstmt.setString(4, type);
+            return pstmt.executeUpdate() > 0;
+        }
+    }
+
+    private static void changePin() throws SQLException {
+        clearScreen();
+        System.out.print("Enter Current PIN :");
+        int currentPIN = scanner.nextInt();
+        scanner.nextLine();
+
+        System.out.print("Enter New PIN (4 digits):");
+        int newPIN = scanner.nextInt();
+        scanner.nextLine();
+
+        System.out.print("Enter Confirm New PIN (4 digits):");
+        int confirmPIN = scanner.nextInt();
+        scanner.nextLine();
+
+        if (newPIN != confirmPIN) {
+            System.out.println("New PIN and confirmation do not match. Please try again.");
+            waitForEnter();
+            clearScreen();
+            return;
+        }
+        if (newPIN < 999 || newPIN > 10000) {
+            System.out.println("New PIN must be 4 digits.");
+            waitForEnter();
+            clearScreen();
+            return;
+        }
+
+        int OriginalPIN = 0;
+        String sql = "SELECT pin FROM user WHERE customerid= ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, customerId);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                OriginalPIN = rs.getInt("pin");
+            } else {
+                System.out.println("There is no PIN");
+                waitForEnter();
+                clearScreen();
+                return;
+            }
+        } catch (SQLException e) {
+            System.out.println("Error retrieving PIN: " + e.getMessage());
+        }
+        if (OriginalPIN != currentPIN) {
+            System.out.println("Entered Current PIN is incorrect");
+            waitForEnter();
+            clearScreen();
+            return;
+        }
+
+        sql = "UPDATE user SET pin = ? WHERE customerid = ? AND pin = ? ";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, newPIN);
+            pstmt.setInt(2, customerId);
+            pstmt.setInt(3, currentPIN);
+            int rowsUpdated = pstmt.executeUpdate();
+            if (rowsUpdated > 0) {
+                System.out.println("PIN changed successfully.");
+            } else {
+                System.out.println("Incorrect current PIN. Please try again.");
+                waitForEnter();
+                clearScreen();
+                return;
+            }
+        } catch (SQLException e) {
+            System.out.println("Error changing PIN: " + e.getMessage());
+        }
+        waitForEnter();
+        clearScreen();
     }
 
     private static void clearScreen() {
         System.out.print("\033[H\033[2J");
         System.out.flush();
+    }
+
+    private static void waitForEnter() {
+        System.out.println("Press Enter to continue...");
+        scanner.nextLine(); // Wait for the user to press Enter
     }
 }
