@@ -19,11 +19,9 @@ public class AutomatedTellerMachine {
             clearScreen();
 
             if (accountType != null) {
-                System.out.println("Login successful!");
-                System.out.println();
-
                 while (true) {
                     System.out.println("```` Automated Teller Machine ````");
+                    System.out.println();
                     if (accountType.equals("A")) {
                         adminOptions();
                     } else if (accountType.equals("C")) {
@@ -125,12 +123,15 @@ public class AutomatedTellerMachine {
             System.out.println();
             System.out.println("1. Insert Card");
             System.out.println("0. Exit");
+            System.out.println();
             System.out.print("Enter your choice: ");
             choice = scanner.nextInt();
+            scanner.nextLine();
 
             if (choice == 0) {
                 System.exit(0);
             } else if (choice == 1) {
+                clearScreen();
                 System.out.print("Enter ID num: ");
                 int id = scanner.nextInt();
                 scanner.nextLine();  // Consume newline
@@ -143,10 +144,15 @@ public class AutomatedTellerMachine {
                     customerId = id;
                     return accountType;
                 } else {
+                    System.out.println();
                     System.out.println("Invalid ID or PIN. Please try again.");
+                    waitForEnter();
                 }
             } else {
+                System.out.println();
                 System.out.println("Please enter a valid choice number (0 or 1) only.");
+                waitForEnter();
+
             }
         }
     }
@@ -175,6 +181,7 @@ public class AutomatedTellerMachine {
         System.out.println("3. Deposit");
         System.out.println("4. Change PIN");
         System.out.println("0. Logout");
+        System.out.println();
         System.out.print("Choose an option: ");
     }
 
@@ -187,17 +194,20 @@ public class AutomatedTellerMachine {
         System.out.println("6. Transfer");
         System.out.println("7. Change PIN");
         System.out.println("0. Logout");
+        System.out.println();
         System.out.print("Choose an option: ");
     }
 
     private static void viewAtmBalance() throws SQLException {
         clearScreen();
-        System.out.print("ATM BALANCE : $");
+        System.out.print("~~~~ ATM BALANCE ~~~~");
+        System.out.println();
+        System.out.println();
         String sql = "SELECT * FROM machine";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                System.out.println(rs.getInt("atmbalance") + "  time :" + rs.getString("time"));
+                System.out.println("Amount :" + rs.getInt("atmbalance") + "  time :" + rs.getString("time"));
             } else {
                 System.out.println("No ATM balance found.");
             }
@@ -214,7 +224,8 @@ public class AutomatedTellerMachine {
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             ResultSet rs = pstmt.executeQuery();
 
-            System.out.println("Last 10 Transactions:");
+            System.out.println("~~~~ Last 10 Transactions ~~~~");
+            System.out.println();
             System.out.printf("%-20s %-10s %-10s %-30s\n", "Transaction Number", "Amount", "Type", "Time");
             System.out.println("----------------------------------------------------------------------");
 
@@ -235,7 +246,9 @@ public class AutomatedTellerMachine {
 
     private static void viewMyAccount() throws SQLException {
         clearScreen();
-        System.out.printf("ID: %d, Bank: %s, Account Balance: %d, Wallet Balance: %d%n", customerId, getCustomerBankName(customerId), getAccountBalance(customerId), getWalletBalance(customerId));
+        System.out.println("~~~~ My account ~~~~");
+        System.out.println();
+        System.out.printf("ID: %d%nBank: %s%nAccount Balance: %d%nWallet Balance: %d%n", customerId, getCustomerBankName(customerId), getAccountBalance(customerId), getWalletBalance(customerId));
         waitForEnter();
         clearScreen();
         return;
@@ -245,6 +258,8 @@ public class AutomatedTellerMachine {
     private static void viewMyBalance() throws SQLException {
 
         clearScreen();
+        System.out.println("~~~~ Balance ~~~~");
+        System.out.println();
         System.out.printf("Account Balance: %d%nWallet Balance: %d%n", getAccountBalance(customerId), getWalletBalance(customerId));
         waitForEnter();
         clearScreen();
@@ -256,9 +271,14 @@ public class AutomatedTellerMachine {
         clearScreen();
         int amount = -1; // Initialize amount to an invalid value
         int walletBalance = getWalletBalance(customerId); // Get current wallet balance
+        System.out.println("~~~~ Deposit ~~~~");
+        System.out.println();
+        System.out.println("(#Important note 5% service charge if other bank customer)");
+        System.out.println();
         System.out.print("Enter amount to deposit: ");
         amount = scanner.nextInt();
         scanner.nextLine(); // Clear invalid input
+        System.out.println();
 
         if (amount > walletBalance) {
             System.out.println("Insufficient wallet balance. Available balance: " + walletBalance);
@@ -371,9 +391,14 @@ public class AutomatedTellerMachine {
         clearScreen();
         int amount = -1; // Initialize amount to an invalid value
         int accountBalance = getAccountBalance(customerId); // Get current account balance
+        System.out.println("~~~~ Withdraw ~~~~");
+        System.out.println();
+        System.out.println("(#Important note 5% service charge if other bank customer)");
+        System.out.println();
+        System.out.print("Enter amount to withdraw :");
         amount = scanner.nextInt();
         scanner.nextLine(); // Clear invalid input
-
+        System.out.println();
         if (amount > accountBalance) {
             System.out.println("Insufficient account balance. Available balance: " + accountBalance);
             waitForEnter();
@@ -388,22 +413,21 @@ public class AutomatedTellerMachine {
             return;
         }
 
-        scanner.nextLine();
-        int withdrawAmount = !bankname.equalsIgnoreCase("kdfc") ? amount - ((amount / 100) * 5) : amount;
+        int withdrawAmount = !bankname.equalsIgnoreCase("kdfc") ? amount + ((amount / 100) * 5) : amount;
         String sql;
         // Begin transaction to ensure atomicity
         connection.setAutoCommit(false);
         try {
             // Update user's account balance and wallet balance
 
-            if (!updateAccountBalance(customerId, -amount)) {
+            if (!updateAccountBalance(customerId, -withdrawAmount)) {
                 System.out.println("Failed to debit amount from account. Transaction aborted.");
                 connection.rollback();
                 waitForEnter();
                 clearScreen();
                 return;
             }
-            if (!updateWalletBalance(customerId, withdrawAmount)) {
+            if (!updateWalletBalance(customerId, amount)) {
                 System.out.println("Failed to credit amount to wallet. Transaction aborted.");
                 connection.rollback();
                 waitForEnter();
@@ -447,17 +471,22 @@ public class AutomatedTellerMachine {
 
     private static void viewMiniStatement() throws SQLException {
         clearScreen();
-        System.out.println("Transaction History");
+        System.out.println("~~~~ Mini Statement ~~~~");
+        System.out.println();
         String sql = "SELECT * FROM transactionlog WHERE customerid = ? ORDER BY time DESC LIMIT 10";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, customerId);
             ResultSet rs = pstmt.executeQuery();
+            System.out.printf("%-20s %-10s %-10s %-30s\n", "Transaction Number", "Amount", "Type", "Time");
+            System.out.println("----------------------------------------------------------------------");
+
             while (rs.next()) {
-                String transactionnum = rs.getString("transaction_number");
+                String transactionNumber = rs.getString("transaction_number");
                 int amount = rs.getInt("amount");
                 String type = rs.getString("type");
                 String time = rs.getString("time");
-                System.out.printf("Transaction id: %s, Amount: %d, Type: %s, Time: %s%n", transactionnum, amount, type, time);
+
+                System.out.printf("%-20s %-10d %-10s %-30s\n", transactionNumber, amount, type, time);
             }
         } catch (SQLException e) {
             System.out.println("Error retrieving transaction history: " + e.getMessage());
@@ -468,13 +497,15 @@ public class AutomatedTellerMachine {
 
     private static void transferFunds() throws SQLException {
         clearScreen();
-        System.out.println("Fund Transfer");
+        System.out.println("~~~~ Fund Transfer ~~~~");
         System.out.println();
-
+        System.out.println("(#Important note 10% service charge if other bank customer)");
+        System.out.println();
         // Prompt for the customer ID to transfer funds to
         System.out.print("Enter Customer ID to transfer to: ");
         int transferId = scanner.nextInt();
         scanner.nextLine();
+        System.out.println();
 
         // Check if the transfer ID exists in the database
         if (!isValidCustomer(transferId)) {
@@ -488,7 +519,7 @@ public class AutomatedTellerMachine {
         System.out.print("Enter amount to transfer: ");
         int transferAmount = scanner.nextInt();
         scanner.nextLine();
-
+        System.out.println();
         // Get current account balance and bank name
         int accountBalance = getAccountBalance(customerId);
         String customerBank = getCustomerBankName(customerId);
@@ -502,13 +533,13 @@ public class AutomatedTellerMachine {
         }
 
         // Calculate amount to be credited, applying transaction fee if applicable
-        int amountToCredit = customerBank.equals("kdfc") ? transferAmount : (int) (transferAmount * 0.9); // 10% fee
+        int amountTodebit = customerBank.equals("kdfc") ? transferAmount : transferAmount + (transferAmount / 10); // 10% fee
 
         // Begin transaction to ensure atomicity
         connection.setAutoCommit(false);
         try {
             // Debit amount from sender's account
-            if (!updateAccountBalance(customerId, -transferAmount)) {
+            if (!updateAccountBalance(customerId, -amountTodebit)) {
                 System.out.println("Failed to debit amount. Transaction aborted.");
                 connection.rollback();
                 waitForEnter();
@@ -517,7 +548,7 @@ public class AutomatedTellerMachine {
             }
 
             // Credit amount to recipient's account
-            if (!updateAccountBalance(transferId, amountToCredit)) {
+            if (!updateAccountBalance(transferId, transferAmount)) {
                 System.out.println("Failed to credit amount. Transaction aborted.");
                 connection.rollback();
                 waitForEnter();
@@ -624,17 +655,23 @@ public class AutomatedTellerMachine {
 
     private static void changePin() throws SQLException {
         clearScreen();
+        System.out.println("~~~~ Change PIN ~~~~");
+        System.out.println();
+
         System.out.print("Enter Current PIN :");
         int currentPIN = scanner.nextInt();
         scanner.nextLine();
+        System.out.println();
 
         System.out.print("Enter New PIN (4 digits):");
         int newPIN = scanner.nextInt();
         scanner.nextLine();
+        System.out.println();
 
         System.out.print("Enter Confirm New PIN (4 digits):");
         int confirmPIN = scanner.nextInt();
         scanner.nextLine();
+        System.out.println();
 
         if (newPIN != confirmPIN) {
             System.out.println("New PIN and confirmation do not match. Please try again.");
@@ -699,7 +736,8 @@ public class AutomatedTellerMachine {
     }
 
     private static void waitForEnter() {
-        System.out.println("Press Enter to continue...");
+        System.out.println();
+        System.out.println("Press Enter to try again...");
         scanner.nextLine(); // Wait for the user to press Enter
     }
 }
