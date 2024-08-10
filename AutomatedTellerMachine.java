@@ -1,7 +1,12 @@
 
 import java.sql.*;
+import java.util.Base64;
 import java.util.Random;
 import java.util.Scanner;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
 
 public class AutomatedTellerMachine {
 
@@ -20,7 +25,7 @@ public class AutomatedTellerMachine {
 
             if (accountType != null) {
                 while (true) {
-                    System.out.println("```` Automated Teller Machine ````");
+                    System.out.println("```` KDFC ATM ````");
                     System.out.println();
                     if (accountType.equals("A")) {
                         adminOptions();
@@ -114,7 +119,7 @@ public class AutomatedTellerMachine {
         }
     }
 
-    private static String login() throws SQLException {
+    private static String login() throws SQLException, Exception {
         int choice;
 
         while (true) {
@@ -122,6 +127,7 @@ public class AutomatedTellerMachine {
             System.out.println("```` Welcome to KDFC ATM ````");
             System.out.println();
             System.out.println("1. Insert Card");
+            System.out.println("2. Forgot PIN / Set PIN");
             System.out.println("0. Exit");
             System.out.println();
             System.out.print("Enter your choice: ");
@@ -129,6 +135,9 @@ public class AutomatedTellerMachine {
             scanner.nextLine();
 
             if (choice == 0) {
+                System.out.println();
+                System.out.println("~~~~ Get your ATM card. ~~~~");
+                System.out.println();
                 System.exit(0);
             } else if (choice == 1) {
                 clearScreen();
@@ -137,17 +146,29 @@ public class AutomatedTellerMachine {
                 scanner.nextLine();  // Consume newline
 
                 System.out.print("Enter PIN: ");
-                String pin = scanner.nextLine();
+                int pin = scanner.nextInt();
+                scanner.nextLine();
 
                 String accountType = authenticate(id, pin);
                 if (accountType != null) {
                     customerId = id;
+                    System.out.println();
+                    System.out.println("Successfully login");
+                    waitForEnter();
                     return accountType;
                 } else {
-                    System.out.println();
-                    System.out.println("Invalid ID or PIN. Please try again.");
-                    waitForEnter();
+
                 }
+            } else if (choice == 2) {
+                clearScreen();
+                System.out.print("Enter ID num: ");
+                int id = scanner.nextInt();
+                scanner.nextLine();  // Consume newline
+
+                System.out.print("Enter name: ");
+                String name = scanner.nextLine();
+                setPIN(id, name);
+
             } else {
                 System.out.println();
                 System.out.println("Please enter a valid choice number (0 or 1) only.");
@@ -157,22 +178,133 @@ public class AutomatedTellerMachine {
         }
     }
 
-    private static String authenticate(int id, String pin) throws SQLException {
-        String sql = "SELECT accounttype, bankname FROM user WHERE customerid = ? AND pin = ?";
+    private static String authenticate(int id, int enteredPin) throws SQLException {
+        String sql = "SELECT accounttype, bankname, pin, secretKey FROM user WHERE customerid = ?";
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, id);
-            pstmt.setString(2, pin);
             ResultSet rs = pstmt.executeQuery();
+
             if (rs.next()) {
-                bankname = rs.getString("bankname");
-                return rs.getString("accounttype");
+                String encryptedPin = rs.getString("pin");
+                String encodedKey = rs.getString("secretKey");
+                int decryptedPin = decrypt(encryptedPin, encodedKey);
+
+                if (decryptedPin == enteredPin) {
+                    bankname = rs.getString("bankname");
+                    return rs.getString("accounttype");
+                } else {
+                    System.out.println();
+                    System.out.println("Invalid PIN. Please try again.");
+                    waitForEnter();
+                    return null;
+                }
             } else {
+                System.out.println();
+                System.out.println("Invalid ID or PIN. Please try again.");
+                waitForEnter();
                 return null;
             }
         } catch (SQLException e) {
             System.out.println("Error during authentication: " + e.getMessage());
             return null;
+        } catch (Exception e) {
+            System.out.println();
+            System.out.println("Please set PIN.");
+            waitForEnter();
+            return null;
         }
+    }
+
+    private static void setPIN(int Id, String name) throws SQLException, Exception {
+        String sql = "SELECT * FROM user WHERE customerid = ? AND name = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setInt(1, Id);
+            pstmt.setString(2, name);
+            ResultSet rs = pstmt.executeQuery();
+            if (!rs.next()) {
+                System.out.println("Invalid ID or Name. Please try again.");
+                waitForEnter();
+                return;
+            }
+        } catch (SQLException e) {
+            System.out.println("Error during authentication: " + e.getMessage());
+            return;
+        }
+
+        System.out.print("Enter New PIN (4 digits): ");
+        int newPIN = scanner.nextInt();
+        scanner.nextLine(); // Consume newline
+
+        System.out.print("Confirm New PIN (4 digits): ");
+        int confirmPIN = scanner.nextInt();
+        scanner.nextLine(); // Consume newline
+
+        if (newPIN != confirmPIN) {
+            System.out.println("New PIN and confirmation do not match. Please try again.");
+            waitForEnter();
+            return;
+        }
+        if (newPIN < 1000 || newPIN > 9999) {
+            System.out.println("New PIN must be 4 digits.");
+            waitForEnter();
+            return;
+        }
+
+        // Generate and encrypt the PIN
+        SecretKey secretKey = generateKey();
+        String encryptedPin = encrypt(newPIN, secretKey);
+
+        // Convert SecretKey to Base64 for storage
+        String encodedKey = Base64.getEncoder().encodeToString(secretKey.getEncoded());
+
+        sql = "UPDATE user SET pin = ?, secretKey = ? WHERE customerid = ? AND name = ?";
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, encryptedPin);
+            pstmt.setString(2, encodedKey);
+            pstmt.setInt(3, Id);
+            pstmt.setString(4, name);
+
+            int rowsUpdated = pstmt.executeUpdate();
+            if (rowsUpdated > 0) {
+                System.out.println("PIN successfully set.");
+                waitForEnter();
+                return;
+            } else {
+                System.out.println("Error updating PIN. Please try again.");
+                waitForEnter();
+                return;
+            }
+        } catch (SQLException e) {
+            System.out.println("Error changing PIN: " + e.getMessage());
+        }
+    }
+
+// Generate a secret key for encryption
+    private static SecretKey generateKey() throws Exception {
+        KeyGenerator keyGenerator = KeyGenerator.getInstance("AES");
+        keyGenerator.init(128); // AES-128 bit key
+        return keyGenerator.generateKey();
+    }
+
+// Encrypt the PIN
+    public static String encrypt(int pin, SecretKey secretKey) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES");
+        cipher.init(Cipher.ENCRYPT_MODE, secretKey);
+        byte[] encryptedBytes = cipher.doFinal(String.valueOf(pin).getBytes());
+        return Base64.getEncoder().encodeToString(encryptedBytes);
+    }
+
+// Decrypt the PIN
+    public static int decrypt(String encryptedPin, String encodedKey) throws Exception {
+        // Decode the stored key
+        byte[] decodedKey = Base64.getDecoder().decode(encodedKey);
+        SecretKey originalKey = new SecretKeySpec(decodedKey, 0, decodedKey.length, "AES");
+
+        Cipher cipher = Cipher.getInstance("AES");
+        cipher.init(Cipher.DECRYPT_MODE, originalKey);
+        byte[] decodedBytes = Base64.getDecoder().decode(encryptedPin);
+        byte[] decryptedBytes = cipher.doFinal(decodedBytes);
+        return Integer.parseInt(new String(decryptedBytes));
     }
 
     private static void adminOptions() {
@@ -269,14 +401,13 @@ public class AutomatedTellerMachine {
 
     private static void deposit() throws SQLException {
         clearScreen();
-        int amount = -1; // Initialize amount to an invalid value
         int walletBalance = getWalletBalance(customerId); // Get current wallet balance
         System.out.println("~~~~ Deposit ~~~~");
         System.out.println();
         System.out.println("(#Important note 5% service charge if other bank customer)");
         System.out.println();
         System.out.print("Enter amount to deposit: ");
-        amount = scanner.nextInt();
+        int amount = scanner.nextInt();
         scanner.nextLine(); // Clear invalid input
         System.out.println();
 
@@ -288,7 +419,6 @@ public class AutomatedTellerMachine {
         }
         int depositAmount = !bankname.equalsIgnoreCase("kdfc") ? amount - ((amount / 100) * 5) : amount;
 
-        String sql;
         // Begin transaction to ensure atomicity
         connection.setAutoCommit(false);
         try {
@@ -389,14 +519,13 @@ public class AutomatedTellerMachine {
 
     private static void withdraw() throws SQLException {
         clearScreen();
-        int amount = -1; // Initialize amount to an invalid value
         int accountBalance = getAccountBalance(customerId); // Get current account balance
         System.out.println("~~~~ Withdraw ~~~~");
         System.out.println();
         System.out.println("(#Important note 5% service charge if other bank customer)");
         System.out.println();
         System.out.print("Enter amount to withdraw :");
-        amount = scanner.nextInt();
+        int amount = scanner.nextInt();
         scanner.nextLine(); // Clear invalid input
         System.out.println();
         if (amount > accountBalance) {
@@ -414,7 +543,7 @@ public class AutomatedTellerMachine {
         }
 
         int withdrawAmount = !bankname.equalsIgnoreCase("kdfc") ? amount + ((amount / 100) * 5) : amount;
-        String sql;
+
         // Begin transaction to ensure atomicity
         connection.setAutoCommit(false);
         try {
@@ -658,17 +787,17 @@ public class AutomatedTellerMachine {
         System.out.println("~~~~ Change PIN ~~~~");
         System.out.println();
 
-        System.out.print("Enter Current PIN :");
+        System.out.print("Enter Current PIN: ");
         int currentPIN = scanner.nextInt();
         scanner.nextLine();
         System.out.println();
 
-        System.out.print("Enter New PIN (4 digits):");
+        System.out.print("Enter New PIN (4 digits): ");
         int newPIN = scanner.nextInt();
         scanner.nextLine();
         System.out.println();
 
-        System.out.print("Enter Confirm New PIN (4 digits):");
+        System.out.print("Enter Confirm New PIN (4 digits): ");
         int confirmPIN = scanner.nextInt();
         scanner.nextLine();
         System.out.println();
@@ -679,53 +808,71 @@ public class AutomatedTellerMachine {
             clearScreen();
             return;
         }
-        if (newPIN < 999 || newPIN > 10000) {
+
+        if (newPIN < 1000 || newPIN > 9999) {
             System.out.println("New PIN must be 4 digits.");
             waitForEnter();
             clearScreen();
             return;
         }
 
-        int OriginalPIN = 0;
-        String sql = "SELECT pin FROM user WHERE customerid= ?";
+        String sql = "SELECT pin, secretKey FROM user WHERE customerid = ?";
+        String encryptedPin;
+        String secretKeyString;
+
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setInt(1, customerId);
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
-                OriginalPIN = rs.getInt("pin");
+                encryptedPin = rs.getString("pin");
+                secretKeyString = rs.getString("secretKey");
             } else {
-                System.out.println("There is no PIN");
+                System.out.println("PIN not found.");
                 waitForEnter();
                 clearScreen();
                 return;
             }
         } catch (SQLException e) {
             System.out.println("Error retrieving PIN: " + e.getMessage());
-        }
-        if (OriginalPIN != currentPIN) {
-            System.out.println("Entered Current PIN is incorrect");
-            waitForEnter();
-            clearScreen();
             return;
         }
 
-        sql = "UPDATE user SET pin = ? WHERE customerid = ? AND pin = ? ";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setInt(1, newPIN);
-            pstmt.setInt(2, customerId);
-            pstmt.setInt(3, currentPIN);
-            int rowsUpdated = pstmt.executeUpdate();
-            if (rowsUpdated > 0) {
-                System.out.println("PIN changed successfully.");
-            } else {
-                System.out.println("Incorrect current PIN. Please try again.");
+        try {
+            int decryptedPin = decrypt(encryptedPin, secretKeyString);
+            if (decryptedPin != currentPIN) {
+                System.out.println("Entered Current PIN is incorrect.");
                 waitForEnter();
                 clearScreen();
                 return;
             }
-        } catch (SQLException e) {
-            System.out.println("Error changing PIN: " + e.getMessage());
+        } catch (Exception e) {
+            System.out.println("Error decrypting PIN: " + e.getMessage());
+            return;
         }
+
+        try {
+            SecretKey newSecretKey = generateKey();
+            String newEncryptedPin = encrypt(newPIN, newSecretKey);
+            sql = "UPDATE user SET pin = ?, secretKey = ? WHERE customerid = ?";
+
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                pstmt.setString(1, newEncryptedPin);
+                pstmt.setString(2, Base64.getEncoder().encodeToString(newSecretKey.getEncoded()));
+                pstmt.setInt(3, customerId);
+                int rowsUpdated = pstmt.executeUpdate();
+                if (rowsUpdated > 0) {
+                    System.out.println("PIN changed successfully.");
+                } else {
+                    System.out.println("Failed to update PIN. Please try again.");
+                    waitForEnter();
+                    clearScreen();
+                    return;
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Error encrypting new PIN: " + e.getMessage());
+        }
+
         waitForEnter();
         clearScreen();
     }
@@ -733,11 +880,12 @@ public class AutomatedTellerMachine {
     private static void clearScreen() {
         System.out.print("\033[H\033[2J");
         System.out.flush();
+
     }
 
     private static void waitForEnter() {
         System.out.println();
-        System.out.println("Press Enter to try again...");
+        System.out.println("Press Enter to continue...");
         scanner.nextLine(); // Wait for the user to press Enter
     }
 }
