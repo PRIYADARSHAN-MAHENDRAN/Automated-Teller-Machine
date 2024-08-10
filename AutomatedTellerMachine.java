@@ -108,8 +108,8 @@ public class AutomatedTellerMachine {
     private static void createTables() throws SQLException {
         String[] sqlQuery = {
             "CREATE TABLE IF NOT EXISTS machine (time TEXT NOT NULL, atmbalance INTEGER NOT NULL)",
-            "CREATE TABLE IF NOT EXISTS user (customerid INTEGER NOT NULL UNIQUE, pin TEXT NOT NULL, accounttype TEXT NOT NULL, bankname TEXT NOT NULL, useraccountbalance INTEGER NOT NULL, userwalletbalance INTEGER NOT NULL)",
-            "CREATE TABLE IF NOT EXISTS transactionlog (customerid INTEGER NOT NULL, amount INTEGER NOT NULL, type TEXT NOT NULL, time TEXT NOT NULL, FOREIGN KEY(customerid) REFERENCES user(customerid))"
+            "CREATE TABLE IF NOT EXISTS user (customerid INTEGER NOT NULL UNIQUE, accounttype TEXT NOT NULL, bankname TEXT NOT NULL, useraccountbalance INTEGER NOT NULL, `userwalletbalance` INTEGER NOT NULL DEFAULT 0, `name` TEXT, `pin` TEXT, `secretKey` TEXT)",
+            "CREATE TABLE IF NOT EXISTS transactionlog (transaction_number TEXT UNIQUE ,customerid INTEGER NOT NULL, amount INTEGER NOT NULL, type TEXT NOT NULL, time TEXT NOT NULL,FOREIGN KEY(customerid) REFERENCES user(customerid))"
         };
 
         try (Statement stmt = connection.createStatement()) {
