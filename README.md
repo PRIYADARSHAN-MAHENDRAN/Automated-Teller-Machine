@@ -38,13 +38,21 @@ Prerequisites
 Installation
 ------------
 
-    git clone https://github.com/PRIYADARSHAN-MAHENDRAN/Automated-Teller-Machine.git
-    
-    cd Automated-Teller-Machine-main
+1.  Clone this repository to your local machine.
+   
+        git clone https://github.com/PRIYADARSHAN-MAHENDRAN/Automated-Teller-Machine.git
 
-    javac -cp .;sqlite-jdbc-3.36.0.3.jar AutomatedTellerMachine.java
-    
-    java -cp .;sqlite-jdbc-3.36.0.3.jar AutomatedTellerMachine
+2.  Navigate to the project directory.
+   
+        cd Automated-Teller-Machine
+
+3.  Compile the Java files.
+
+        javac -cp .;sqlite-jdbc-3.36.0.3.jar AutomatedTellerMachine.java
+
+4.  Run the program.
+
+        java -cp .;sqlite-jdbc-3.36.0.3.jar AutomatedTellerMachine
 
 
 
